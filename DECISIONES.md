@@ -21,6 +21,7 @@ Cada decisión del proyecto, por qué se tomó y el dato que la respalda.
 | 15 | Python calcula la decisión esperada, pero no se la entrega al LLM | Control de alucinaciones; mismo patrón que Python (3) en el Ejercicio 5 | Se usará para verificar la respuesta del LLM |
 | 16 | Umbral de 1,5 veces la meta para detener la línea | Supuesto heredado del grupo; debe calibrarse con el responsable de calidad | B: 2,16 veces la meta → detener |
 | 17 | n8n Cloud (prueba de 14 días) con nodo Code en Python | Así lo usa el profesor en clase; el flujo corre sin depender del computador (R6) | Prueba: 14 días, 1.000 ejecuciones; vence el 23-nov, después del Hito 2 |
+| 18 | Mismo código Python en el Mac y en n8n; en n8n se agrega `return analizar(_items)` | R2: nodo Code con lógica propia. Probar primero localmente facilita encontrar errores | Resultados idénticos en ambos (B: z = 6,73; 2,16 veces la meta) |
 
 ## Resultados del análisis (al 4-may-2026)
 
