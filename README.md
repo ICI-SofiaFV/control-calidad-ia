@@ -1,6 +1,7 @@
 # Control de calidad automatizado por línea de producción
 
 Hito 1 – Certamen 2 · IA Generativa para la Gestión Industrial
+
 Autora: Sofía Fariña
 
 ## 1. Problema (R7)
