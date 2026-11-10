@@ -21,8 +21,7 @@ genera merma.
 | Meta de calidad | Tasa de defectos ≤ 2,5 % |
 
 El sistema revisa las tres líneas automáticamente cada mañana, detecta si hubo un
-cambio real o solo un dato aislado, propone una decisión con un LLM y avisa al
-responsable por Gmail y Telegram.
+cambio real o solo un dato aislado, propone una decisión con un LLM y avisa al responsable por Gmail y WhatsApp.
 
 ## 2. Datos (R8)
 
