@@ -24,6 +24,7 @@ Cada decisión del proyecto, por qué se tomó y el dato que la respalda.
 | 18 | Mismo código Python en el Mac y en n8n; en n8n se agrega `return analizar(_items)` | R2: nodo Code con lógica propia. Probar primero localmente facilita encontrar errores | Resultados idénticos en ambos (B: z = 6,73; 2,16 veces la meta) |
 | 19 | Modelo Gemini flash vigente (gemini-3.8-flash / flash-latest), temperatura 0 | Temperatura 0 = misma respuesta ante mismos datos (consistencia). Google retira modelos antiguos (2.5-flash dio error 404) | El nodo reintenta 3 veces ante fallas |
 | 20 | Prompt con formato de respuesta explícito + modelo Flash-Lite | Sin formato explícito el LLM respondió "Seguir." (mayúscula y punto) y el esquema lo rechazó, causando reintentos. Flash Latest tardó ~5 min por respuesta | Prueba de diagnóstico sin esquema: decisiones correctas en A, B y C, pero formato inválido |
+| 21 | Basic LLM Chain + Gemini Flash-Lite (temp. 0) + Structured Output Parser con enum | R1: JSON con diagnóstico, recomendación, prioridad y justificación. Flash-Lite responde en segundos | 3/3 recomendaciones coinciden con la regla de Python; cifras citadas correctas |
 
 ## Resultados del análisis (al 4-may-2026)
 
