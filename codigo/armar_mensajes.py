@@ -1,5 +1,5 @@
 # =====================================================================
-# Armar mensajes: 3 líneas entran -> 1 correo HTML + 1 mensaje de Telegram
+# Armar mensajes: 3 líneas entran -> 1 correo HTML + 1 mensaje de WhatsApp
 # Ordena por prioridad (lo urgente primero), igual que la Estación 5 del curso.
 # =====================================================================
 
@@ -53,7 +53,7 @@ interpretación con Gemini y verificación con reglas de negocio. La decisión f
 
 asunto = f"[{peor['prioridad'].upper()}] Control de calidad {fecha_datos}: {peor['linea']} – {peor['recomendacion']}"
 
-# ---------- Telegram (texto corto) ----------
+# ---------- WhatsApp (texto corto) ----------
 iconos = {"alta": "🔴", "media": "🟡", "baja": "🟢"}
 texto = f"CONTROL DE CALIDAD · datos al {fecha_datos}\n"
 for d in lineas:
