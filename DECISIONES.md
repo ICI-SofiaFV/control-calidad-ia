@@ -26,6 +26,8 @@ Cada decisión del proyecto, por qué se tomó y el dato que la respalda.
 | 20 | Prompt con formato de respuesta explícito + modelo Flash-Lite | Sin formato explícito el LLM respondió "Seguir." (mayúscula y punto) y el esquema lo rechazó, causando reintentos. Flash Latest tardó ~5 min por respuesta | Prueba de diagnóstico sin esquema: decisiones correctas en A, B y C, pero formato inválido |
 | 21 | Basic LLM Chain + Gemini Flash-Lite (temp. 0) + Structured Output Parser con enum | R1: JSON con diagnóstico, recomendación, prioridad y justificación. Flash-Lite responde en segundos | 3/3 recomendaciones coinciden con la regla de Python; cifras citadas correctas |
 | 22 | Nodo Merge + "Verificar IA" (Python): la decisión final es la regla; si la IA no coincide, se pide revisión humana | "El LLM lee, las reglas deciden"; mismo patrón que Python (3) del Ejercicio 5; control de alucinaciones | Prueba: IA coincide 3/3; caso simulado de desacuerdo → se aplica la regla y se marca revisión humana |
+| 23 | Registro en hoja `Registro` + un solo correo HTML ordenado por prioridad | Instrucciones: registro histórico y Gmail (R11). Un resumen con lo urgente primero en vez de 3 correos | Registro con columnas IA_coincide y Revisión_humana para trazabilidad |
+| 24 | Se reemplaza Telegram (decisión 3) por WhatsApp Cloud API (número de prueba de Meta) | R11 acepta "WhatsApp o Telegram". En Chile, Telegram cobra el SMS de verificación para crear una cuenta nueva ($990 CLP); WhatsApp es gratis | Limitación: el número de prueba solo envía si el destinatario escribió en las últimas 24 h y admite máximo 5 números verificados |
 
 ## Resultados del análisis (al 4-may-2026)
 
