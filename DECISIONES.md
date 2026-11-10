@@ -28,6 +28,7 @@ Cada decisión del proyecto, por qué se tomó y el dato que la respalda.
 | 22 | Nodo Merge + "Verificar IA" (Python): la decisión final es la regla; si la IA no coincide, se pide revisión humana | "El LLM lee, las reglas deciden"; mismo patrón que Python (3) del Ejercicio 5; control de alucinaciones | Prueba: IA coincide 3/3; caso simulado de desacuerdo → se aplica la regla y se marca revisión humana |
 | 23 | Registro en hoja `Registro` + un solo correo HTML ordenado por prioridad | Instrucciones: registro histórico y Gmail (R11). Un resumen con lo urgente primero en vez de 3 correos | Registro con columnas IA_coincide y Revisión_humana para trazabilidad |
 | 24 | Se reemplaza Telegram (decisión 3) por WhatsApp Cloud API (número de prueba de Meta) | R11 acepta "WhatsApp o Telegram". En Chile, Telegram cobra el SMS de verificación para crear una cuenta nueva ($990 CLP); WhatsApp es gratis | Limitación: el número de prueba solo envía si el destinatario escribió en las últimas 24 h y admite máximo 5 números verificados |
+| 25 | Nodo WhatsApp Business Cloud con número de prueba de Meta; texto corto tomado de "Armar mensajes" | R11: Gmail lleva el detalle, WhatsApp la alerta corta (Desafío 3 del curso) | Mensaje recibido el 9-11-2026 22:22. Token temporal de 24 h y ventana de 24 h: antes de cada demo, escribir "hola" al número de prueba |
 
 ## Resultados del análisis (al 4-may-2026)
 
