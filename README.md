@@ -45,6 +45,15 @@ citada en el enunciado del proyecto como fuente de datos. Se cargó en Google Sh
 
 ## 3. Cómo funciona (R6)
 
+```
+⏰ Cada día 7:00 ─┐
+                  ├─► Leer datos ─► Análisis Python ─┬─► Interpretar con IA ─┐
+⚡ Probar ahora ──┘                                  └───────────────────────┴─► Juntar ─► Verificar IA ─┬─► Registro (Sheets)
+                                                                                                         └─► Armar mensajes ─► Gmail ─► WhatsApp
+
+Flujo aparte "Alerta de errores": si cualquier nodo falla, envía un correo con el nodo y el error.
+```
+
 | Nodo | Qué hace |
 |---|---|
 | Cada día 7:00 / Probar ahora | Disparador programado (zona horaria America/Santiago) y botón para pruebas |
@@ -119,12 +128,22 @@ de un problema real. Capturas en [`evidencia/`](evidencia/).
 
 ## 8. Estructura del repositorio
 
+```
+├── README.md          este documento
+├── INFORME.md         informe del Hito 1
+├── DECISIONES.md      bitácora: cada decisión, su justificación y su evidencia
+├── codigo/            Python de cada nodo y prompt del LLM
+├── datos/             datos.csv y su ficha (FUENTE.md)
+├── flujo/             flujos de n8n exportados sin credenciales
+└── evidencia/         capturas de las ejecuciones
+```
+
 **Para replicarlo:** importar los JSON de `flujo/` en n8n, reemplazar `CORREO_DEL_RESPONSABLE`,
 `56XXXXXXXXX`, `ID_DEL_NUMERO_DE_WHATSAPP` y `URL_DE_TU_HOJA`, y crear credenciales propias
 de Google Sheets, Gmail, Gemini y WhatsApp. El código Python usa solo la biblioteca estándar.
 
 ## 9. Uso de IA
 
-Se usó Claude (Anthropic) : para guiar la construcción paso a paso, 
+Se usó Claude (Anthropic) como tutor: para guiar la construcción paso a paso,
 revisar código y ayudar a diagnosticar errores. Cada nodo fue construido, probado y comprendido
 por la autora; las decisiones y su justificación están registradas en `DECISIONES.md`.
