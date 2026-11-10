@@ -34,6 +34,15 @@ recomendación explicada y trazable, dejando la decisión final en manos de una 
 
 ## 3. Diagrama del flujo (n8n)
 
+```
+⏰ Cada día 7:00 ─┐
+                  ├─► Leer datos ─► Análisis Python ─┬─► Interpretar con IA ─┐
+⚡ Probar ahora ──┘                                  └───────────────────────┴─► Juntar ─► Verificar IA ─┬─► Registro (Sheets)
+                                                                                                         └─► Armar mensajes ─► Gmail ─► WhatsApp
+
+Flujo aparte "Alerta de errores": si cualquier nodo falla, envía un correo con el nodo y el error.
+```
+
 | Paso del enunciado | Implementación |
 |---|---|
 | 1. Disparador | Schedule Trigger diario a las 7:00 (America/Santiago) + disparador manual para pruebas |
@@ -93,6 +102,12 @@ dice si eso es normal.
 Prompt completo y esquema: [`codigo/prompt_llm.md`](codigo/prompt_llm.md).
 
 **Ejemplo de entrada (Línea B, resumida):**
+
+```
+Estado detectado: cambio_de_nivel · Tasa mediana 7 días: 5,41 % · Tasa del último día: 5,38 %
+Tasa normal: 3,29 % · Límite superior: 5,29 % · Veces la meta: 2,16
+Detención promedio 7 días: 107 min/día · Pronóstico próximo día (Holt): 5,45 %
+```
 
 **Salida real de Gemini:**
 ```json
