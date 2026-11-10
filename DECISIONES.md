@@ -23,6 +23,7 @@ Cada decisión del proyecto, por qué se tomó y el dato que la respalda.
 | 17 | n8n Cloud (prueba de 14 días) con nodo Code en Python | Así lo usa el profesor en clase; el flujo corre sin depender del computador (R6) | Prueba: 14 días, 1.000 ejecuciones; vence el 23-nov, después del Hito 2 |
 | 18 | Mismo código Python en el Mac y en n8n; en n8n se agrega `return analizar(_items)` | R2: nodo Code con lógica propia. Probar primero localmente facilita encontrar errores | Resultados idénticos en ambos (B: z = 6,73; 2,16 veces la meta) |
 | 19 | Modelo Gemini flash vigente (gemini-3.8-flash / flash-latest), temperatura 0 | Temperatura 0 = misma respuesta ante mismos datos (consistencia). Google retira modelos antiguos (2.5-flash dio error 404) | El nodo reintenta 3 veces ante fallas |
+| 20 | Prompt con formato de respuesta explícito + modelo Flash-Lite | Sin formato explícito el LLM respondió "Seguir." (mayúscula y punto) y el esquema lo rechazó, causando reintentos. Flash Latest tardó ~5 min por respuesta | Prueba de diagnóstico sin esquema: decisiones correctas en A, B y C, pero formato inválido |
 
 ## Resultados del análisis (al 4-may-2026)
 
