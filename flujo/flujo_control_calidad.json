@@ -1,0 +1,508 @@
+{
+  "name": "Hito 1 - Control de calidad por línea",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7a2631a6-8ece-445d-9332-b4ecddb3993c",
+      "name": "Cada día 7:00"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "id": "2b501a9f-154d-40c5-a9d2-e8af81fe65ff",
+      "name": "Probar ahora"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "URL_DE_TU_HOJA",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 926107545,
+          "mode": "list",
+          "cachedResultName": "produccion_planta",
+          "cachedResultUrl": "URL_DE_TU_HOJA"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "80965cd3-0e24-46be-9feb-dd86aaadd02e",
+      "name": "Leer datos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "4kuTnpjvkcGez1H2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# ---------- PARTE 4.1: limpiar los datos y sumar los turnos ----------\n\ndef num(valor):\n    #Convierte texto a número. Si la celda viene vacía o con texto, devuelve None\n    try:\n        return float(valor)\n    except (TypeError, ValueError):\n        return None\n\n\ndef limpiar_y_agrupar(items):\n    #Recibe las filas de la planilla (una por turno) y devuelve,\n    # para cada línea, su serie diaria ordenada por fecha.\n    dias = {}          # clave: (linea, fecha) -> totales del día\n    descartadas = 0    # contador de filas sucias\n\n    for item in items:\n        fila = item[\"json\"]\n        linea = fila.get(\"linea\")\n        fecha = fila.get(\"fecha\")\n        unidades = num(fila.get(\"unidades_producidas\"))\n        defectos = num(fila.get(\"unidades_defectuosas\"))\n        detencion = num(fila.get(\"minutos_detencion\")) or 0\n\n        # Validación: se descarta la fila si le falta algo o es imposible\n        if (not linea or not fecha or unidades is None or defectos is None\n                or unidades <= 0 or defectos < 0 or defectos > unidades):\n            descartadas += 1\n            continue\n\n        # Sumar los dos turnos (mañana y tarde) del mismo día\n        clave = (linea, str(fecha)[:10])\n        if clave not in dias:\n            dias[clave] = {\"unidades\": 0, \"defectos\": 0, \"detencion\": 0}\n        dias[clave][\"unidades\"] += unidades\n        dias[clave][\"defectos\"] += defectos\n        dias[clave][\"detencion\"] += detencion\n\n    # Armar una serie por línea, ordenada por fecha, con la tasa diaria\n    series = {}\n    for (linea, fecha) in sorted(dias):\n        d = dias[(linea, fecha)]\n        series.setdefault(linea, []).append({\n            \"fecha\": fecha,\n            \"unidades\": int(d[\"unidades\"]),\n            \"defectos\": int(d[\"defectos\"]),\n            \"detencion\": int(d[\"detencion\"]),\n            \"tasa\": d[\"defectos\"] / d[\"unidades\"],\n        })\n    return series, descartadas\n\n\n# ---------- PARTE 4.2: gráfico de control -> estado de la línea ----------\n\nMETA = 0.025        # meta de calidad: tasa de defectos <= 2,5 % (supuesto del proyecto)\nBASE_DIAS = 60      # días que definen \"lo normal\" (fase I del gráfico de control)\nVENTANA = 7         # última semana: lo que se compara contra lo normal\nRECIENTES = 3       # días recientes donde se buscan valores atípicos\n\n\ndef media(valores):\n    return sum(valores) / len(valores)\n\n\ndef desviacion(valores):\n    #Desviación estándar: cuánto varía normalmente la tasa de un día a otro.\n    m = media(valores)\n    return (sum((v - m) ** 2 for v in valores) / (len(valores) - 1)) ** 0.5\n\n\ndef mediana(valores):\n    #Valor del medio: no se deja engañar por un día extremo.\n    ordenados = sorted(valores)\n    n = len(ordenados)\n    mitad = n // 2\n    return ordenados[mitad] if n % 2 else (ordenados[mitad - 1] + ordenados[mitad]) / 2\n\n\ndef grafico_control(serie):\n    #Compara la última semana de una línea contra su comportamiento normal.\n    tasas = [dia[\"tasa\"] for dia in serie]\n    if len(tasas) < BASE_DIAS + VENTANA:\n        raise ValueError(f\"Datos insuficientes: {len(tasas)} días (se necesitan {BASE_DIAS + VENTANA})\")\n\n    # 1. Lo normal: primeros 60 días\n    base = tasas[:BASE_DIAS]\n    promedio_base = media(base)\n    desv_base = desviacion(base)\n    limite_superior = promedio_base + 3 * desv_base\n\n    # 2. Lo de ahora: mediana de la última semana\n    mediana_7d = mediana(tasas[-VENTANA:])\n\n    # 3. ¿Cuánto se alejó la última semana de lo normal? (en \"errores estándar\")\n    #    El error estándar de una mediana es ~1,25 veces el de un promedio.\n    error_estandar = 1.25 * desv_base / VENTANA ** 0.5\n    z = (mediana_7d - promedio_base) / error_estandar\n\n    # 4. Clasificación\n    max_recientes = max(tasas[-RECIENTES:])\n    if z > 3:\n        estado = \"cambio_de_nivel\"\n    elif max_recientes > limite_superior:\n        estado = \"valor_atipico\"\n    elif mediana_7d > META:\n        estado = \"estable_sobre_meta\"\n    else:\n        estado = \"estable\"\n\n    return {\n        \"estado\": estado,\n        \"fecha_ultima\": serie[-1][\"fecha\"],\n        \"tasa_ultimo_dia\": round(tasas[-1], 5),\n        \"tasa_mediana_7d\": round(mediana_7d, 5),\n        \"max_tasa_ultimos_3d\": round(max_recientes, 5),\n        \"promedio_normal\": round(promedio_base, 5),\n        \"limite_superior\": round(limite_superior, 5),\n        \"z_cambio\": round(z, 2),\n        \"veces_la_meta\": round(mediana_7d / META, 2),\n        \"detencion_media_7d_min\": round(media([d[\"detencion\"] for d in serie[-VENTANA:]])),\n    }\n\n# ---------- PARTE 4.3: modelos de pronóstico (navaja de Occam) ----------\n# Cada modelo predice la tasa del día siguiente usando solo los días anteriores.\n# Entrenamiento = primeros 60 días (BASE_DIAS); prueba = días restantes.\n\nMEJORA_MINIMA = 0.05   # Holt debe mejorar >= 5 % al mejor modelo simple para preferirlo\n\ndef pronosticos_holt(tasas, alfa, beta):\n    \"\"\"Holt (suavizamiento exponencial doble): sigue el nivel y la tendencia.\n    Devuelve la predicción para cada día (desde el día 2) y la del día siguiente.\"\"\"\n    nivel, tendencia = tasas[0], tasas[1] - tasas[0]\n    predicciones = {}\n    for t in range(1, len(tasas)):\n        predicciones[t] = nivel + tendencia                      # lo que Holt esperaba para el día t\n        nuevo_nivel = alfa * tasas[t] + (1 - alfa) * (nivel + tendencia)\n        tendencia = beta * (nuevo_nivel - nivel) + (1 - beta) * tendencia\n        nivel = nuevo_nivel\n    return predicciones, nivel + tendencia\n\n\ndef error_medio(tasas, predicciones, dias):\n    \"\"\"MAE: error absoluto medio entre lo real y lo predicho.\"\"\"\n    return media([abs(tasas[t] - predicciones[t]) for t in dias])\n\n\ndef comparar_modelos(serie):\n    tasas = [dia[\"tasa\"] for dia in serie]\n    n = len(tasas)\n    entrenamiento = range(VENTANA, BASE_DIAS)   # días para ajustar Holt\n    prueba = range(BASE_DIAS, n)                # días para comparar (no vistos al ajustar)\n\n    # 1. Ajustar Holt: probar combinaciones de alfa y beta y quedarse con la de menor error\n    mejor = None\n    for alfa in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:\n        for beta in [0.01, 0.05, 0.1, 0.2, 0.3]:\n            pred, _ = pronosticos_holt(tasas[:BASE_DIAS], alfa, beta)\n            mae = error_medio(tasas, pred, entrenamiento)\n            if mejor is None or mae < mejor[0]:\n                mejor = (mae, alfa, beta)\n    _, alfa, beta = mejor\n\n    # 2. Predicciones de los 3 modelos sobre toda la serie\n    pred_holt, proximo_holt = pronosticos_holt(tasas, alfa, beta)\n    pred_movil = {t: media(tasas[t - VENTANA:t]) for t in range(VENTANA, n)}\n    pred_ingenuo = {t: tasas[t - 1] for t in range(1, n)}\n\n    # 3. Error de cada modelo en el periodo de prueba\n    errores = {\n        \"holt\": error_medio(tasas, pred_holt, prueba),\n        \"promedio_movil\": error_medio(tasas, pred_movil, prueba),\n        \"ingenuo\": error_medio(tasas, pred_ingenuo, prueba),\n    }\n    # 4. Navaja de Occam: Holt solo se recomienda si mejora en al menos 5 % al mejor modelo simple\n    mejor_simple = min([\"promedio_movil\", \"ingenuo\"], key=errores.get)\n    mejora_holt = (errores[mejor_simple] - errores[\"holt\"]) / errores[mejor_simple]\n    recomendado = \"holt\" if mejora_holt >= MEJORA_MINIMA else mejor_simple\n\n    return {\n        \"holt_alfa\": alfa,\n        \"holt_beta\": beta,\n        \"mae_holt\": round(errores[\"holt\"], 5),\n        \"mae_promedio_movil\": round(errores[\"promedio_movil\"], 5),\n        \"mae_ingenuo\": round(errores[\"ingenuo\"], 5),\n        \"mejora_holt_pct\": round(mejora_holt * 100, 1),\n        \"modelo_recomendado\": recomendado,\n        \"dias_prueba\": len(prueba),\n        \"pronostico_holt\": round(proximo_holt, 5),\n        \"pronostico_promedio_movil\": round(media(tasas[-VENTANA:]), 5),\n    }\n\n\n# ---------- PARTE 4.4: regla de decisión y resultado final ----------\n\nUMBRAL_DETENER = 1.5   # sobre 1,5 veces la meta, un cambio de nivel justifica detener (supuesto)\n\n\ndef decision_esperada(estado, veces_la_meta):\n    \"\"\"Lo que DEBERÍA recomendarse según las reglas del negocio.\n    No se le entrega al LLM: se usa después para verificar su respuesta.\"\"\"\n    if estado == \"cambio_de_nivel\":\n        if veces_la_meta > UMBRAL_DETENER:\n            return \"detener la línea\", \"alta\"\n        return \"ajustar la línea\", \"media\"\n    if estado == \"valor_atipico\":\n        return \"revisión humana antes de actuar\", \"media\"\n    if estado == \"estable_sobre_meta\":\n        return \"ajustar la línea\", \"media\"\n    return \"seguir\", \"baja\"\n\n\ndef analizar(items):\n    \"\"\"Función principal: de las filas de la planilla a un resultado por línea.\"\"\"\n    series, descartadas = limpiar_y_agrupar(items)\n    salida = []\n    for linea, serie in series.items():\n        control = grafico_control(serie)\n        modelos = comparar_modelos(serie)\n        recomendacion, prioridad = decision_esperada(control[\"estado\"], control[\"veces_la_meta\"])\n        resultado = {\"linea\": linea, \"dias_analizados\": len(serie), \"filas_descartadas\": descartadas}\n        resultado.update(control)\n        resultado.update(modelos)\n        resultado[\"regla_recomendacion\"] = recomendacion\n        resultado[\"regla_prioridad\"] = prioridad\n        salida.append({\"json\": resultado})\n    return salida\nreturn analizar(_items)"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -128
+      ],
+      "id": "8bc0b173-7f43-4a56-8e5f-8866fac521a6",
+      "name": "Analisis Python"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-flash-lite-latest",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        208
+      ],
+      "id": "af3d777a-8d1f-474f-aefd-30c684914341",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "6vucwQstnM84zxnf",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"diagnostico\": { \"type\": \"string\" },\n    \"recomendacion\": {\n      \"type\": \"string\",\n      \"enum\": [\"seguir\", \"ajustar la línea\", \"detener la línea\", \"revisión humana antes de actuar\"]\n    },\n    \"prioridad\": { \"type\": \"string\", \"enum\": [\"alta\", \"media\", \"baja\"] },\n    \"justificacion\": { \"type\": \"string\" }\n  },\n  \"required\": [\"diagnostico\", \"recomendacion\", \"prioridad\", \"justificacion\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        816,
+        208
+      ],
+      "id": "b87e2327-f5e3-4c38-abcd-616f079a84a3",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres el analista de calidad de una planta manufacturera. Recibes los resultados de un modelo estadístico (gráfico de control y pronóstico) sobre la tasa diaria de defectos de una línea de producción. La meta de calidad es una tasa menor o igual a 2,5 %.\n\nDecide aplicando ESTAS REGLAS, sin excepciones:\n1. Estado \"cambio_de_nivel\" y la línea supera más de 1,5 veces la meta: recomendacion \"detener la línea\", prioridad \"alta\".\n2. Estado \"cambio_de_nivel\" y la línea supera hasta 1,5 veces la meta: recomendacion \"ajustar la línea\", prioridad \"media\".\n3. Estado \"valor_atipico\": recomendacion \"revisión humana antes de actuar\", prioridad \"media\".\n4. Estado \"estable_sobre_meta\": recomendacion \"ajustar la línea\", prioridad \"media\".\n5. Estado \"estable\": recomendacion \"seguir\", prioridad \"baja\".\n\nInstrucciones de redacción:\n- Español, tono técnico y breve: máximo dos oraciones por campo.\n- El diagnóstico explica qué ocurre en lenguaje simple, sin nombres de variables.\n- La justificación cita al menos dos cifras de los resultados, copiadas tal como aparecen abajo.\n- Usa SOLO las cifras entregadas. No inventes datos ni calcules cifras nuevas.\n- No menciones las reglas ni los umbrales.\n\nFormato de respuesta:\n- Responde ÚNICAMENTE con un objeto JSON con las claves \"diagnostico\", \"recomendacion\", \"prioridad\" y \"justificacion\".\n- \"recomendacion\" debe ser exactamente uno de estos textos, en minúsculas y sin punto final: \"seguir\", \"ajustar la línea\", \"detener la línea\", \"revisión humana antes de actuar\".\n- \"prioridad\" debe ser exactamente uno de estos textos, en minúsculas y sin punto final: \"alta\", \"media\", \"baja\".\n- Sin markdown, sin asteriscos y sin texto fuera del JSON.\n\nResultados del modelo:\n- Línea: {{ $json.linea }}\n- Fecha del último dato: {{ $json.fecha_ultima }}\n- Estado detectado: {{ $json.estado }}\n- Tasa mediana de los últimos 7 días: {{ ($json.tasa_mediana_7d * 100).toFixed(2).replace('.', ',') }} %\n- Tasa del último día: {{ ($json.tasa_ultimo_dia * 100).toFixed(2).replace('.', ',') }} %\n- Tasa máxima de los últimos 3 días: {{ ($json.max_tasa_ultimos_3d * 100).toFixed(2).replace('.', ',') }} %\n- Tasa normal de la línea (primeros 60 días): {{ ($json.promedio_normal * 100).toFixed(2).replace('.', ',') }} %\n- Límite superior de control: {{ ($json.limite_superior * 100).toFixed(2).replace('.', ',') }} %\n- Veces que supera la meta: {{ String($json.veces_la_meta).replace('.', ',') }}\n- Detención promedio de los últimos 7 días: {{ $json.detencion_media_7d_min }} minutos por día\n- Pronóstico de la tasa para el próximo día ({{ $json.modelo_recomendado === 'holt' ? 'modelo de Holt' : 'promedio móvil de 7 días' }}): {{ (($json.modelo_recomendado === 'holt' ? $json.pronostico_holt : $json.pronostico_promedio_movil) * 100).toFixed(2).replace('.', ',') }} %",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        64
+      ],
+      "id": "0e5d0a80-bf32-4419-b19c-f414172301ec",
+      "name": "Interpretar con IA",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "bb4c193b-6c12-478b-94ef-050661527b0b",
+      "name": "Juntar análisis e IA"
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# =====================================================================\n# Verificar IA: compara la decisión del LLM con la regla de negocio en Python.\n# \"El LLM lee, las reglas deciden\" (mismo patrón que Python (3) del Ejercicio 5).\n# =====================================================================\n\nsalida = []\nfor item in _items:\n    d = item[\"json\"]\n    ia = d.get(\"output\", {})                      # respuesta del LLM\n\n    ia_rec = ia.get(\"recomendacion\")\n    ia_pri = ia.get(\"prioridad\")\n    regla_rec = d[\"regla_recomendacion\"]          # lo que dicen las reglas\n    regla_pri = d[\"regla_prioridad\"]\n\n    coincide = (ia_rec == regla_rec) and (ia_pri == regla_pri)\n\n    if coincide:\n        nota = \"La recomendación de la IA coincide con las reglas de negocio.\"\n    else:\n        nota = (f\"La IA propuso '{ia_rec}' (prioridad {ia_pri}), pero las reglas indican \"\n                f\"'{regla_rec}' (prioridad {regla_pri}). Se aplica la regla y se pide revisión humana.\")\n\n    resultado = dict(d)                           # conserva todas las cifras del análisis\n    resultado.pop(\"output\", None)\n    resultado.update({\n        \"diagnostico\": ia.get(\"diagnostico\", \"\"),\n        \"justificacion\": ia.get(\"justificacion\", \"\"),\n        \"recomendacion_ia\": ia_rec,\n        \"prioridad_ia\": ia_pri,\n        \"recomendacion\": regla_rec,               # decisión final: siempre la regla\n        \"prioridad\": regla_pri,\n        \"ia_coincide\": coincide,\n        \"requiere_revision_humana\": (not coincide) or d[\"estado\"] == \"valor_atipico\",\n        \"nota_verificacion\": nota,\n    })\n    salida.append({\"json\": resultado})\n\nreturn salida"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "37430cbf-4749-4b39-a44b-ad08bace1cf3",
+      "name": "Verificar IA"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "URL_DE_TU_HOJA",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 459628659,
+          "mode": "list",
+          "cachedResultName": "Registro",
+          "cachedResultUrl": "URL_DE_TU_HOJA"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha_ejecución": "={{ $now.format('yyyy-MM-dd HH:mm') }}",
+            "Linea": "={{ $json.linea }}",
+            "Estado": "={{ $json.estado }}",
+            "Diagnóstico": "={{ $json.diagnostico }}",
+            "Recomendación": "={{ $json.recomendacion }}",
+            "Prioridad": "={{ $json.prioridad }}",
+            "Justificación ": "={{ $json.justificacion }}",
+            "IA_coincide": "={{ $json.ia_coincide ? 'sí' : 'no' }}",
+            "Revisión_humana": "={{ $json.requiere_revision_humana ? 'sí' : 'no' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Fecha_ejecución",
+              "displayName": "Fecha_ejecución",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Linea",
+              "displayName": "Linea",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Diagnóstico",
+              "displayName": "Diagnóstico",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Recomendación",
+              "displayName": "Recomendación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prioridad",
+              "displayName": "Prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Justificación ",
+              "displayName": "Justificación ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "IA_coincide",
+              "displayName": "IA_coincide",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Revisión_humana",
+              "displayName": "Revisión_humana",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1488,
+        0
+      ],
+      "id": "db53a1b2-b478-4e7e-a597-f60aa71e74eb",
+      "name": "Registrar en Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "4kuTnpjvkcGez1H2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# =====================================================================\n# Armar mensajes: 3 líneas entran -> 1 correo HTML + 1 mensaje de WhatsApp\n# Ordena por prioridad (lo urgente primero), igual que la Estación 5 del curso.\n# =====================================================================\n\ndef pct(x):                      # 0.05407 -> \"5,41 %\"\n    return f\"{x * 100:.2f}\".replace(\".\", \",\") + \" %\"\n\ndef dec(x):                      # 2.16 -> \"2,16\"\n    return f\"{x:.2f}\".replace(\".\", \",\")\n\nORDEN = {\"alta\": 0, \"media\": 1, \"baja\": 2}\nCOLOR = {\"alta\": \"#c5221f\", \"media\": \"#b06000\", \"baja\": \"#137333\"}\nFONDO = {\"alta\": \"#fce8e6\", \"media\": \"#fef7e0\", \"baja\": \"#e6f4ea\"}\nESTADO = {\"cambio_de_nivel\": \"Cambio de nivel sostenido\", \"valor_atipico\": \"Valor atípico aislado\",\n          \"estable_sobre_meta\": \"Estable, pero sobre la meta\", \"estable\": \"Proceso estable\"}\nMODELO = {\"holt\": \"Holt\", \"promedio_movil\": \"Promedio móvil 7 días\", \"ingenuo\": \"Ingenuo\"}\n\nlineas = sorted([it[\"json\"] for it in _items], key=lambda d: ORDEN[d[\"prioridad\"]])\npeor = lineas[0]\nfecha_datos = peor[\"fecha_ultima\"]\n\n# ---------- Correo HTML ----------\nbloques = \"\"\nfor d in lineas:\n    p = d[\"prioridad\"]\n    revision = (\"<p style='color:#c5221f'><b>⚠ Requiere revisión humana.</b> \" + d[\"nota_verificacion\"] + \"</p>\"\n                if d[\"requiere_revision_humana\"] else \"\")\n    pronostico = d[\"pronostico_holt\"] if d[\"modelo_recomendado\"] == \"holt\" else d[\"pronostico_promedio_movil\"]\n    bloques += f\"\"\"\n<div style=\"border-left:6px solid {COLOR[p]};background:{FONDO[p]};padding:12px 16px;margin:14px 0\">\n  <h3 style=\"margin:0 0 6px 0\">{d['linea']} · {d['recomendacion'].capitalize()}\n      <span style=\"color:{COLOR[p]}\">(prioridad {p})</span></h3>\n  <p style=\"margin:4px 0\"><b>Estado:</b> {ESTADO[d['estado']]}</p>\n  <p style=\"margin:4px 0\"><b>Diagnóstico:</b> {d['diagnostico']}</p>\n  <p style=\"margin:4px 0\"><b>Justificación:</b> {d['justificacion']}</p>\n  {revision}\n  <table cellpadding=\"4\" style=\"font-size:13px;border-collapse:collapse\">\n    <tr><td>Tasa mediana 7 días</td><td><b>{pct(d['tasa_mediana_7d'])}</b> ({dec(d['veces_la_meta'])} veces la meta de 2,5 %)</td></tr>\n    <tr><td>Tasa normal / límite de control</td><td>{pct(d['promedio_normal'])} / {pct(d['limite_superior'])}</td></tr>\n    <tr><td>Pronóstico próximo día</td><td>{pct(pronostico)} ({MODELO[d['modelo_recomendado']]})</td></tr>\n    <tr><td>Detención promedio 7 días</td><td>{d['detencion_media_7d_min']} min/día</td></tr>\n  </table>\n</div>\"\"\"\n\nhtml = f\"\"\"<div style=\"font-family:Arial,sans-serif;max-width:640px\">\n<h2 style=\"color:#091D44\">Control de calidad por línea</h2>\n<p>Datos hasta el <b>{fecha_datos}</b> · {len(lineas)} líneas analizadas · {peor['filas_descartadas']} filas descartadas en la limpieza.</p>\n{bloques}\n<p style=\"color:#666;font-size:12px\">Generado automáticamente por n8n: análisis en Python (gráfico de control y pronóstico),\ninterpretación con Gemini y verificación con reglas de negocio. La decisión final la toma el responsable de calidad.</p>\n</div>\"\"\"\n\nasunto = f\"[{peor['prioridad'].upper()}] Control de calidad {fecha_datos}: {peor['linea']} – {peor['recomendacion']}\"\n\n# ---------- WhatsApp (texto corto) ----------\niconos = {\"alta\": \"🔴\", \"media\": \"🟡\", \"baja\": \"🟢\"}\ntexto = f\"CONTROL DE CALIDAD · datos al {fecha_datos}\\n\"\nfor d in lineas:\n    texto += (f\"\\n{iconos[d['prioridad']]} {d['linea']}: {d['recomendacion'].upper()} (prioridad {d['prioridad']})\\n\"\n              f\"   Tasa 7 días {pct(d['tasa_mediana_7d'])} · {dec(d['veces_la_meta'])} veces la meta\")\n    if d[\"requiere_revision_humana\"]:\n        texto += \"\\n   ⚠ Requiere revisión humana\"\ntexto += \"\\n\\nEl detalle está en el correo.\"\n\nreturn [{\"json\": {\"asunto\": asunto, \"html\": html, \"mensaje_corto\": texto,\n                  \"hay_prioridad_alta\": peor[\"prioridad\"] == \"alta\"}}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        144
+      ],
+      "id": "e211dd5c-d9fc-4985-9407-5587622e844e",
+      "name": "Armar mensajes"
+    },
+    {
+      "parameters": {
+        "sendTo": "CORREO_DEL_RESPONSABLE",
+        "subject": "={{ $json.asunto }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        144
+      ],
+      "id": "442abf29-a579-4f52-8c46-57296109e8a8",
+      "name": "Enviar Gmail",
+      "webhookId": "d251ff90-d62b-4686-b50e-09b02a067a84",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "C73OxmDcsRDnzMXC",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=ID_DEL_NUMERO_DE_WHATSAPP",
+        "recipientPhoneNumber": "56XXXXXXXXX",
+        "textBody": "={{ $('Armar mensajes').first().json.mensaje_corto }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1936,
+        144
+      ],
+      "id": "6714ce05-b0e4-424a-a53c-0b5439eb28a5",
+      "name": "Enviar WhatsApp",
+      "webhookId": "15b9c177-0064-4df6-a39e-d0ff7df74e1e",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "e6WIbmuflaGBkavI",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cada día 7:00": {
+      "main": [
+        [
+          {
+            "node": "Leer datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probar ahora": {
+      "main": [
+        [
+          {
+            "node": "Leer datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer datos": {
+      "main": [
+        [
+          {
+            "node": "Analisis Python",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisis Python": {
+      "main": [
+        [
+          {
+            "node": "Interpretar con IA",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Juntar análisis e IA",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Interpretar con IA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Interpretar con IA",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar con IA": {
+      "main": [
+        [
+          {
+            "node": "Juntar análisis e IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juntar análisis e IA": {
+      "main": [
+        [
+          {
+            "node": "Verificar IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar IA": {
+      "main": [
+        [
+          {
+            "node": "Registrar en Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Armar mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar mensajes": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Gmail": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "QGjWecQunirsIxKE"
+  },
+  "versionId": "b463cdcb-169c-4d61-922b-42db82dc8bd4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fbc0f6804f170dbcbc329b8bfabaf71de057c4a5eb22dcd2087c0c21ccbf8509"
+  },
+  "nodeGroups": [],
+  "id": "BjJFqC9osYiQVPOo",
+  "tags": []
+}

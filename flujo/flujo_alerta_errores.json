@@ -1,0 +1,69 @@
+{
+  "name": "Alerta de errores - Hito 1",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "05ac568c-34d0-48b2-9b5f-015673cea35c",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "sendTo": "CORREO_DEL_RESPONSABLE",
+        "subject": "=[ERROR] Falló el flujo {{ $json.workflow.name }}",
+        "emailType": "text",
+        "message": "=El flujo \"{{ $json.workflow.name }}\" falló.      Nodo donde falló: {{ $json.execution.lastNodeExecuted }}      Mensaje de error: {{ $json.execution.error.message }}      Ver ejecución: {{ $json.execution.url }}       Revisar antes del próximo turno. Mientras tanto, revisar las líneas manualmente.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "8a775be6-a583-492d-980d-993fdb16bbf1",
+      "name": "Avisar error por Gmail",
+      "webhookId": "179a1c92-bb08-4b72-a5ea-ad1307e31447",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "C73OxmDcsRDnzMXC",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Avisar error por Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9d480747-1aa1-411f-9264-9027d0dccb4a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fbc0f6804f170dbcbc329b8bfabaf71de057c4a5eb22dcd2087c0c21ccbf8509"
+  },
+  "nodeGroups": [],
+  "id": "QGjWecQunirsIxKE",
+  "tags": []
+}
